@@ -84,9 +84,9 @@ var frameRates = []float64{23.976, 24, 25}
 // Align finds the scale and offset that best explain the subtitle's cue
 // starts given the video's speech onsets.
 //
-// Scale 1 wins ties, a rate ratio has to give a strictly sharper spike. Each
-// extra ratio is one more chance for a wrong subtitle to find a noise peak;
-// the gate hasn't been re-measured with them in.
+// A rate ratio has to beat scale 1 by MinScaleGain. 24/23.976 is so close to
+// 1 that on some titles both fit about equally well, and the ratio winning
+// by a hair put every cue up to 2.7s off.
 func Align(cues, onsets []float64, windows [][2]float64) Alignment {
 	if len(cues) == 0 || len(onsets) == 0 {
 		return Alignment{Scale: 1}
@@ -116,13 +116,16 @@ func Align(cues, onsets []float64, windows [][2]float64) Alignment {
 		}()
 	}
 	wg.Wait()
-	best := found[0]
-	for _, a := range found[1:] {
-		if a.Sigma() > best.Sigma() {
-			best = a
+	ratio := found[1]
+	for _, a := range found[2:] {
+		if a.Sigma() > ratio.Sigma() {
+			ratio = a
 		}
 	}
-	return best
+	if ratio.Sigma() >= found[0].Sigma()+MinScaleGain {
+		return ratio
+	}
+	return found[0]
 }
 
 // slide finds the offset that best explains the cue starts.
@@ -146,7 +149,12 @@ func slide(cues, onsets []float64, windows [][2]float64) Alignment {
 
 	var out Alignment
 	best, sum, sumSq, n := -1.0, 0.0, 0.0, 0.0
-	for off := -maxOffset; off <= maxOffset; off += step {
+	first, last, inRun := 0.0, 0.0, false
+	steps := int(math.Round(maxOffset / step))
+	for k := -steps; k <= steps; k++ {
+		off := float64(k) * step
+		prevInRun := inRun
+		inRun = false
 		hits, judged := 0, 0
 		for _, c := range cues {
 			t := c + off
@@ -161,15 +169,22 @@ func slide(cues, onsets []float64, windows [][2]float64) Alignment {
 		if judged < minJudged {
 			continue
 		}
+		// every offset within the tolerance of the true one explains the
+		// same cues, so the best rate is a plateau: take its middle, its
+		// first offset is up to a tolerance early
 		rate := float64(hits) / float64(judged)
-		if rate > best {
-			best, out.Offset = rate, off
+		switch {
+		case rate > best:
+			best, first, last, inRun = rate, off, off, true
+		case rate == best && prevInRun:
+			last, inRun = off, true
 		}
 		sum, sumSq, n = sum+rate, sumSq+rate*rate, n+1
 	}
 	if n == 0 {
 		return Alignment{}
 	}
+	out.Offset = (first + last) / 2
 	out.HitRate, out.Baseline = best, sum/n
 	out.StdDev = math.Sqrt(math.Max(sumSq/n-out.Baseline*out.Baseline, 0))
 	return out
@@ -202,10 +217,20 @@ func covered(t float64, windows [][2]float64) bool {
 // film subtitle against a cartoon episode reached 4.8, which is why MinLift
 // exists (that one fails it at +2.4).
 //
-// 4.8 to 5.4 is the tightest margin in the set. Fast overlapping dialogue over
-// music is the hard case: a correct subtitle only gets ~29% against ~21% by
-// chance. Both gates are vars so they can be retuned.
-var MinSigma = 5.0
+// Fast overlapping dialogue over music is the hard case: a correct subtitle
+// only gets ~29% against ~21% by chance.
+//
+// Retuned on 1,036 films and episodes, each with its own subtitle shifted by
+// known amounts and two subtitles of other titles. At 5, 34 of 1,869 wrong
+// subtitles got through, all between 5.0 and 5.9. At 6 none did, and 92.7% of
+// the right ones still passed (95.7% at 5). The gates are vars so they can be
+// retuned.
+var MinSigma = 6.0
+
+// MinScaleGain is how much sharper, in sigma, a rate ratio has to be than
+// scale 1 to win. On the 1,036 titles, ratios that really applied won by 0.4
+// or more (median 5.5); the two wrong ratio picks won by 0.02 or lost.
+var MinScaleGain = 0.25
 
 // MinLift: the winning offset has to beat chance by at least this much. No
 // real match has failed it (lowest seen +9.1) and it catches high sigma noise.
