@@ -222,10 +222,11 @@ func covered(t float64, windows [][2]float64) bool {
 //
 // Retuned on 1,036 films and episodes, each with its own subtitle shifted by
 // known amounts and two subtitles of other titles. At 5, 34 of 1,869 wrong
-// subtitles got through, all between 5.0 and 5.9. At 6 none did, and 92.7% of
-// the right ones still passed (95.7% at 5). The gates are vars so they can be
-// retuned.
-var MinSigma = 6.0
+// subtitles got through, all between 5.0 and 5.9, and the C port of this code
+// (VLC, other decoder) reached 6.4 once. At 6.5 neither let any through, and
+// 91.6% of the right ones still passed (95.7% at 5). The gates are vars so
+// they can be retuned.
+var MinSigma = 6.5
 
 // MinScaleGain is how much sharper, in sigma, a rate ratio has to be than
 // scale 1 to win. On the 1,036 titles, ratios that really applied won by 0.4
