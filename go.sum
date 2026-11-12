@@ -1,2 +1,4 @@
 github.com/mohaanymo/subapi v0.1.0 h1:weaLQa+MJJiOVB2IEofKpayys0gao4uqvySAl10Qquc=
 github.com/mohaanymo/subapi v0.1.0/go.mod h1:7cYiV6KFzE3Xi/nChk5+C6cf946iKD45dM/GGBg3XAI=
+golang.org/x/text v0.42.0 h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=
+golang.org/x/text v0.42.0/go.mod h1:ojzP1Z+2QtioaF8DTtO8K5q7JWVVYwZKenzujK0Zd0E=

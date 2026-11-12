@@ -7,8 +7,13 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/mohaanymo/subapi"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 )
 
 // Request is the body of POST /subtitle.
@@ -108,7 +113,7 @@ func Handler(sources []subapi.Source, logger *log.Logger) http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(Response{
-			SRT: string(res.Data), Source: res.Source, Release: res.Release,
+			SRT: toUTF8(res.Data, cmp.Or(res.Lang, req.Lang)), Source: res.Source, Release: res.Release,
 			Offset:   res.Sync.Offset,
 			Scale:    cmp.Or(res.Sync.Scale, 1),
 			HitRate:  res.Sync.HitRate,
@@ -237,4 +242,30 @@ func httpError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// legacy code pages for subtitles that aren't UTF-8; JSON would turn their
+// bytes into U+FFFD and lose the text for good. Unlisted languages use 1252.
+var legacy = map[string]*charmap.Charmap{
+	"AR": charmap.Windows1256, "FA": charmap.Windows1256, "UR": charmap.Windows1256,
+	"HE": charmap.Windows1255, "TR": charmap.Windows1254, "EL": charmap.Windows1253,
+	"RU": charmap.Windows1251, "UK": charmap.Windows1251, "BG": charmap.Windows1251,
+	"PL": charmap.Windows1250, "CS": charmap.Windows1250, "HU": charmap.Windows1250, "RO": charmap.Windows1250,
+}
+
+// toUTF8 returns b as UTF-8: valid UTF-8 as is, UTF-16 by its byte order
+// mark, anything else in the language's legacy code page.
+func toUTF8(b []byte, lang string) string {
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	cm := legacy[strings.ToUpper(lang)]
+	if cm == nil {
+		cm = charmap.Windows1252
+	}
+	out, _, err := transform.Bytes(unicode.BOMOverride(cm.NewDecoder()), b)
+	if err != nil {
+		return strings.ToValidUTF8(string(b), "?")
+	}
+	return string(out)
 }
