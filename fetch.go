@@ -22,8 +22,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/mohaanymo/m314ss/srt"
 	"github.com/mohaanymo/subapi"
 )
 
@@ -173,18 +175,45 @@ func (c *Client) translate(ctx context.Context, res Result, lang string) (Result
 
 	// The translation is made from the original file, not the shifted one, so
 	// it needs the same correction. Re-measuring is cheap and catches a
-	// translator that retimed things itself. A translated file can be thinner
-	// to align against though, so if that fails reuse the correction we got
-	// from the original.
+	// translator that retimed things itself.
 	if c.Speech != nil {
-		switch m, fixed, err := c.Speech.Match(data); {
-		case err == nil && m.Matched():
+		if m, fixed, err := c.Speech.Match(data); err == nil && m.Matched() {
 			out.Data, out.Sync = fixed, m
-		case res.Sync.Shifted:
-			out.Data = res.Sync.Retime(data)
+			return out, nil
 		}
 	}
+	// A translated file can be thinner to align against, so it may not pass
+	// on its own. The original's correction still holds if its cues are the
+	// original's. If they aren't, it is a translation of some other file (a
+	// season pack's id can stand for every episode in it), and shipping it
+	// would put a wrong subtitle in the right language on the video.
+	if res.Sync.Shifted {
+		data = res.Sync.Retime(data)
+	}
+	if !sameTiming(data, res.Data) {
+		return Result{}, fmt.Errorf("translation of %s isn't timed like it, not the same file", res.Release)
+	}
+	out.Data = data
 	return out, nil
+}
+
+// sameTiming reports whether most cues of a start where a cue of b does: a
+// translation keeps the original's timestamps, merging or splitting a few
+// lines at most. Another file's cues land near b's only by chance.
+func sameTiming(a, b []byte) bool {
+	as, bs := srt.Starts(srt.Parse(a)), srt.Starts(srt.Parse(b))
+	if len(as) == 0 || len(bs) == 0 {
+		return false
+	}
+	sort.Float64s(bs)
+	near := 0
+	for _, t := range as {
+		i := sort.SearchFloat64s(bs, t-0.1)
+		if i < len(bs) && bs[i] <= t+0.1 {
+			near++
+		}
+	}
+	return float64(near) >= 0.8*float64(len(as))
 }
 
 func (c *Client) logf(format string, args ...any) {
