@@ -29,6 +29,15 @@ type Alignment struct {
 	HitRate  float64
 	Baseline float64
 	StdDev   float64
+
+	// Parts is set when parts of the subtitle need different offsets (an ad
+	// break or a scene the video doesn't have), see split. It replaces Offset
+	// when retiming. nil means Offset holds for the whole file.
+	Parts []Part
+
+	// rescued: under the gate as a whole, but every part passed it on its
+	// own cues, see MinRescueSigma
+	rescued bool
 }
 
 // Lift is how far the best offset beats chance, in percentage points. Nice
@@ -56,13 +65,22 @@ func (a Alignment) Sigma() float64 {
 	return (a.HitRate - a.Baseline) / a.StdDev
 }
 
-// Correction is the fix in words, for logs: "+4.70s", or "+4.70s x1.042"
-// when the subtitle also drifts.
+// Correction is the fix in words, for logs: "+4.70s", "+4.70s x1.042" when
+// the subtitle also drifts, "+0.10s, -61.20s from 0:41:23" when it has parts.
 func (a Alignment) Correction() string {
-	if a.Scale == 1 {
-		return fmt.Sprintf("%+.2fs", a.Offset)
+	s := fmt.Sprintf("%+.2fs", a.Offset)
+	for i, p := range a.Parts {
+		if i == 0 {
+			s = fmt.Sprintf("%+.2fs", p.Offset)
+			continue
+		}
+		t := int(p.From)
+		s += fmt.Sprintf(", %+.2fs from %d:%02d:%02d", p.Offset, t/3600, t/60%60, t%60)
 	}
-	return fmt.Sprintf("%+.2fs x%.4g", a.Offset, a.Scale)
+	if a.Scale != 1 {
+		s += fmt.Sprintf(" x%.4g", a.Scale)
+	}
+	return s
 }
 
 // Matched reports whether the subtitle belongs to this video.
@@ -71,7 +89,12 @@ func (a Alignment) Correction() string {
 // cartoon episode at 4.8 (lift +2.4). Lift alone let a different show through
 // at +14.3 (sigma 3.1). Every wrong pairing I've measured fails at least one
 // and every right one clears both.
-func (a Alignment) Matched() bool { return a.Sigma() >= MinSigma && a.Lift() >= MinLift }
+//
+// A subtitle with parts can also match when each part passes on its own
+// cues (MinPartSigma), see split.
+func (a Alignment) Matched() bool {
+	return a.rescued || a.Sigma() >= MinSigma && a.Lift() >= MinLift
+}
 
 // Frame rates a subtitle may have been timed against. A file timed for a
 // 25fps cut and played on a 24fps one starts fine and is 225s late by the
@@ -141,38 +164,19 @@ func Align(cues, onsets []float64, windows [][2]float64) Alignment {
 //
 // onsets must be sorted.
 func slide(cues, onsets []float64, windows [][2]float64) Alignment {
-	// don't trust a rate computed off a handful of cues
-	minJudged := len(cues) / 10
-	if minJudged < 20 {
-		minJudged = 20
-	}
-
 	var out Alignment
 	best, sum, sumSq, n := -1.0, 0.0, 0.0, 0.0
 	first, last, inRun := 0.0, 0.0, false
-	steps := int(math.Round(maxOffset / step))
-	for k := -steps; k <= steps; k++ {
-		off := float64(k) * step
+	for k, rate := range curve(cues, onsets, windows) {
+		off := offsetAt(k)
 		prevInRun := inRun
 		inRun = false
-		hits, judged := 0, 0
-		for _, c := range cues {
-			t := c + off
-			if !covered(t, windows) {
-				continue
-			}
-			judged++
-			if i := sort.SearchFloat64s(onsets, t-tolerance); i < len(onsets) && onsets[i] <= t+tolerance {
-				hits++
-			}
-		}
-		if judged < minJudged {
+		if math.IsNaN(rate) {
 			continue
 		}
 		// every offset within the tolerance of the true one explains the
 		// same cues, so the best rate is a plateau: take its middle, its
 		// first offset is up to a tolerance early
-		rate := float64(hits) / float64(judged)
 		switch {
 		case rate > best:
 			best, first, last, inRun = rate, off, off, true
@@ -184,10 +188,90 @@ func slide(cues, onsets []float64, windows [][2]float64) Alignment {
 	if n == 0 {
 		return Alignment{}
 	}
-	out.Offset = (first + last) / 2
+	out.Offset = refine(cues, (first+last)/2, onsets, windows)
 	out.HitRate, out.Baseline = best, sum/n
 	out.StdDev = math.Sqrt(math.Max(sumSq/n-out.Baseline*out.Baseline, 0))
 	return out
+}
+
+// steps is how many offsets slide tries on each side of zero.
+var steps = int(math.Round(maxOffset / step))
+
+func offsetAt(k int) float64 { return float64(k-steps) * step }
+
+// curve is the hit rate at every offset from -maxOffset to +maxOffset in
+// steps, NaN where too few cues land in decoded audio to judge.
+func curve(cues, onsets []float64, windows [][2]float64) []float64 {
+	return rateCurve(cues, onsets, windows, offsetAt, 2*steps+1)
+}
+
+// rateCurve is curve over the n offsets at(0) .. at(n-1).
+func rateCurve(cues, onsets []float64, windows [][2]float64, at func(int) float64, n int) []float64 {
+	// don't trust a rate computed off a handful of cues
+	minJudged := len(cues) / 10
+	if minJudged < 20 {
+		minJudged = 20
+	}
+	rates := make([]float64, n)
+	for k := range rates {
+		off := at(k)
+		hits, judged := 0, 0
+		for _, c := range cues {
+			t := c + off
+			if !covered(t, windows) {
+				continue
+			}
+			judged++
+			if hit(onsets, t) {
+				hits++
+			}
+		}
+		rates[k] = math.NaN()
+		if judged >= minJudged {
+			rates[k] = float64(hits) / float64(judged)
+		}
+	}
+	return rates
+}
+
+// Trace, when set, is told every step Match takes, for working out why a
+// subtitle came out the way it did.
+var Trace = func(string, ...any) {}
+
+// refine moves offset by the median gap between each cue that hits and the
+// nearest speech start, a few rounds: the plateau middle hangs on the two
+// cues at its edges, the median on all of them.
+func refine(cues []float64, offset float64, onsets []float64, windows [][2]float64) float64 {
+	for range 3 {
+		var d []float64
+		for _, c := range cues {
+			t := c + offset
+			if !covered(t, windows) {
+				continue
+			}
+			best := math.Inf(1)
+			for i := sort.SearchFloat64s(onsets, t-tolerance); i < len(onsets) && onsets[i] <= t+tolerance; i++ {
+				if math.Abs(onsets[i]-t) < math.Abs(best) {
+					best = onsets[i] - t
+				}
+			}
+			if !math.IsInf(best, 1) {
+				d = append(d, best)
+			}
+		}
+		if len(d) < 20 {
+			return offset
+		}
+		sort.Float64s(d)
+		offset += d[len(d)/2]
+	}
+	return offset
+}
+
+// hit reports whether speech starts within tolerance of t. onsets sorted.
+func hit(onsets []float64, t float64) bool {
+	i := sort.SearchFloat64s(onsets, t-tolerance)
+	return i < len(onsets) && onsets[i] <= t+tolerance
 }
 
 func covered(t float64, windows [][2]float64) bool {

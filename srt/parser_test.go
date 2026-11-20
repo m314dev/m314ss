@@ -30,3 +30,17 @@ func TestParseAndRetime(t *testing.T) {
 		t.Fatalf("scaled start = %v, want 132.146", back[0].Start)
 	}
 }
+
+func TestRetimeParts(t *testing.T) {
+	in := []byte("1\n00:00:10,000 --> 00:00:12,000\nat 00:00:10,000 she said\n\n" +
+		"2\n00:01:40,000 --> 00:01:42,500\nb\n\n3\n00:01:40,000\nbroken\n")
+	out := RetimeParts(in, 1, []float64{0, 100}, []float64{1, -60})
+	cues := Parse(out)
+	if len(cues) != 2 || cues[0].Start != 11 || cues[1].Start != 40 || cues[1].End != 42.5 {
+		t.Fatalf("got %+v", cues)
+	}
+	if !bytes.Contains(out, []byte("at 00:00:10,000 she said")) ||
+		!bytes.Contains(out, []byte("\n00:01:40,000\nbroken\n")) {
+		t.Fatalf("non cue lines changed:\n%s", out)
+	}
+}

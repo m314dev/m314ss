@@ -123,9 +123,10 @@ For each subtitle candidate:
 3. Test offsets in **50ms steps**.
 4. Count cue starts that fall within **350ms** of a detected speech onset.
 5. Measure the score across every tested offset.
-6. Find the strongest offset.
+6. Find the strongest offset, then fine-tune it by the median gap between the cues and the speech onsets nearest them.
 7. Compare that peak against the background distribution.
 8. Repeat with the timestamps scaled by each framerate ratio (23.976, 24, 25) and keep the sharpest peak.
+9. Look for parts that need another offset (see below).
 
 The result contains:
 
@@ -154,7 +155,7 @@ A genuine match should produce an offset that stands out clearly from all the al
 The current matcher requires both:
 
 ```text
-Sigma >= 5.0
+Sigma >= 6.5
 Lift  >= 0.05
 ```
 
@@ -168,7 +169,15 @@ If the entire subtitle is consistently 4.7 seconds late, the matcher detects tha
 
 If the subtitle was timed for a 25 fps cut and the video is 24 fps, it starts in sync and ends minutes out. That is not an offset problem, so the matcher also tries every ratio of 23.976, 24 and 25 fps and keeps whichever gives the sharpest peak. The cue times are scaled by that ratio before the offset is applied.
 
-It intentionally does **not** try to hide other synchronization problems. A subtitle timed for a different cut of the film (extra scenes, missing scenes) is rejected rather than partially fixed.
+It also fixes subtitles timed for **another cut** of the video: an ad break in the broadcast it was timed on, or a scene this video doesn't have, moves everything after it. Such a subtitle is right in parts, each part with its own offset:
+
+1. The subtitle is cut in two at every cue, and each side is aligned on its own cues, up to ±10 minutes out (breaks can be long). The cut where the two sides explain the most cues beyond what one offset does is the break. Each side is then cut again the same way, up to 4 parts.
+2. A cut has to pay for itself in extra hits, and the offsets either side of it have to be 3 to 400 seconds apart, so a good subtitle stays in one piece.
+3. Both sides of every cut have to stand out on their own cues (sigma 5, judged against the offsets within 120 seconds of their own), and the strongest part has to pass the gate a whole subtitle does. That keeps a wrong subtitle from being stitched together out of lucky stretches, and lets a cut subtitle through even when no single offset fits enough of it.
+
+Parts are only suspected on the sampled audio. When there is a suspect, the whole audio is decoded once (per video) to place them, so most subtitles never pay for it. A subtitle just under the gate gets the same second look, since the sampled windows can miss the speech it times.
+
+Tested on 893 titles that were never used for tuning, with a copy of each title's own subtitle shifted, stretched, or cut by an inserted ad break. On the 758 titles whose own subtitle matched, 91.5% of shifted copies, 91.7% of stretched copies and 88.4% of ad-break copies came out usable (90% of the cues within 0.5 s of the original), and none of 1602 subtitles of other titles got through.
 
 ## Use as a Go library
 
@@ -283,8 +292,8 @@ m314ss is still young and the matcher will continue to be tested and tuned again
 Currently:
 
 * SRT subtitles are supported.
-* Only constant offsets and framerate drift are corrected. A subtitle for a different cut is rejected.
-* The offset search is limited to ±120 seconds.
+* Constant offsets, framerate drift and cuts (up to 4 parts) are corrected.
+* The offset search is limited to ±120 seconds for the whole file, ±10 minutes for a part.
 * FFmpeg is required.
 * Difficult audio can make matching harder.
 

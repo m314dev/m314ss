@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mohaanymo/m314ss/srt"
 	"github.com/mohaanymo/subapi"
 )
 
@@ -175,14 +174,14 @@ func (c *Client) translate(ctx context.Context, res Result, lang string) (Result
 	// The translation is made from the original file, not the shifted one, so
 	// it needs the same correction. Re-measuring is cheap and catches a
 	// translator that retimed things itself. A translated file can be thinner
-	// to align against though, so if that fails reuse the offset we got from
-	// the original.
+	// to align against though, so if that fails reuse the correction we got
+	// from the original.
 	if c.Speech != nil {
 		switch m, fixed, err := c.Speech.Match(data); {
 		case err == nil && m.Matched():
 			out.Data, out.Sync = fixed, m
 		case res.Sync.Shifted:
-			out.Data = srt.Retime(data, res.Sync.Scale, res.Sync.Offset)
+			out.Data = res.Sync.Retime(data)
 		}
 	}
 	return out, nil
