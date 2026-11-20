@@ -112,7 +112,7 @@ The audio matcher does.
 
 ## How matching works
 
-m314ss samples the video's audio using FFmpeg and extracts sparse **speech onset timestamps** using an energy-based VAD.
+m314ss samples the video's audio using FFmpeg, keeps the speech band (200 to 3500 Hz) and extracts sparse **speech onset timestamps** using an energy-based VAD.
 
 For longer videos it samples multiple windows across the runtime instead of decoding the entire file.
 

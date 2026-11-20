@@ -30,7 +30,9 @@ func Duration(vidPath string) (float64, error) {
 	return n(m[1])*3600 + n(m[2])*60 + n(m[3]) + n(m[4])/100, nil
 }
 
-// ExtractWindow decodes [start, start+dur) as 16kHz mono s16le PCM.
+// ExtractWindow decodes [start, start+dur) as 16kHz mono s16le PCM, cut to
+// the speech band. The VAD only measures energy, so without the cut a
+// film's bass and drums count as speech.
 // -ss before -i does a keyframe seek, so cost scales with window size not
 // file size.
 func ExtractWindow(vidPath string, start, dur float64) ([]byte, error) {
@@ -41,6 +43,7 @@ func ExtractWindow(vidPath string, start, dur float64) ([]byte, error) {
 		"-t", fmt.Sprintf("%.3f", dur),
 		"-i", vidPath,
 		"-vn",
+		"-af", "aformat=channel_layouts=mono,aresample=16000,highpass=f=200,lowpass=f=3500",
 		"-ac", "1",
 		"-ar", fmt.Sprint(SampleRate),
 		"-f", "s16le",
