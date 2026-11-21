@@ -285,6 +285,8 @@ The client can analyze the video locally and send only the resulting onset/windo
 
 This means the machine holding the video still performs the audio analysis, while the server can handle subtitle providers and keep their credentials centralized.
 
+With `"translate": true` in the request (and a SubDL Pro key on the server), a title with no subtitle in the language asked for falls back to translation. A subtitle in another language is verified against the audio the usual way, then SubDL machine-translates it (told the season and episode, which it needs for a season pack). The translation is checked against the audio too. If it is too thin to pass on its own, it is only returned when its cue times are the verified file's (at least 80% of its cues within 0.1 s). A season pack's id can stand for every episode in it, so a translation of some other episode is dropped, not shipped. Off by default, since each translation costs a credit.
+
 ## Current limitations
 
 m314ss is still young and the matcher will continue to be tested and tuned against more material.
