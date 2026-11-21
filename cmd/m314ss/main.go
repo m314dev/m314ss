@@ -40,7 +40,7 @@ import (
 	"strings"
 	"time"
 
-	subtitles "github.com/mohaanymo/m314ss"
+	subtitles "github.com/m314dev/m314ss"
 	"github.com/mohaanymo/subapi"
 )
 

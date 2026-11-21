@@ -38,7 +38,7 @@ So the same algorithm answers both questions:
 The only external dependency is **FFmpeg** available on `PATH`.
 
 ```bash
-go install github.com/mohaanymo/m314ss/cmd/m314ss@latest
+go install github.com/m314dev/m314ss/cmd/m314ss@latest
 ```
 
 Then:
@@ -182,13 +182,13 @@ Tested on 893 titles that were never used for tuning, with a copy of each title'
 ## Use as a Go library
 
 ```bash
-go get github.com/mohaanymo/m314ss
+go get github.com/m314dev/m314ss
 ```
 
 The package name is `subtitles`:
 
 ```go
-import subtitles "github.com/mohaanymo/m314ss"
+import subtitles "github.com/m314dev/m314ss"
 ```
 
 To verify and synchronize an existing SRT:

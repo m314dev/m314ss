@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mohaanymo/m314ss/srt"
+	"github.com/m314dev/m314ss/srt"
 	"github.com/mohaanymo/subapi"
 )
 
