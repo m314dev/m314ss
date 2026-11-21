@@ -35,10 +35,26 @@ So the same algorithm answers both questions:
 
 ## Quick start
 
-The only external dependency is **FFmpeg** available on `PATH`.
+The only external dependency is **FFmpeg** available on `PATH` (or given with `-ffmpeg <path>`).
+
+Prebuilt binaries for Linux, macOS and Windows (amd64 and arm64, plus armv7 on Linux) are on the [releases page](https://github.com/m314dev/m314ss/releases). Or use a package manager:
 
 ```bash
+# macOS and Linux (Homebrew)
+brew install m314dev/tap/m314ss
+
+# Windows (Scoop)
+scoop bucket add m314dev https://github.com/m314dev/scoop-bucket
+scoop install m314ss
+
+# with a Go toolchain
 go install github.com/m314dev/m314ss/cmd/m314ss@latest
+```
+
+The Docker image already has FFmpeg:
+
+```bash
+docker run --rm -v "$PWD:/data" ghcr.io/m314dev/m314ss -srt subtitle.srt -video movie.mkv
 ```
 
 Then:
