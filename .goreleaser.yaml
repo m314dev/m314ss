@@ -1,0 +1,94 @@
+# Release config for goreleaser v2. CI runs it on every v* tag
+# (.github/workflows/release.yml). Local dry run:
+#   goreleaser release --snapshot --clean
+version: 2
+
+project_name: m314ss
+
+builds:
+  - main: ./cmd/m314ss
+    binary: m314ss
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    # No version variable in cmd/m314ss yet; add `var version = "dev"` there
+    # and `-X main.version={{.Version}}` here to stamp it.
+    ldflags:
+      - -s -w
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - linux_arm_7
+      - darwin_amd64
+      - darwin_arm64
+      - windows_amd64
+      - windows_arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: git
+  sort: asc
+
+release:
+  github:
+    owner: m314dev
+    name: m314ss
+
+# brews is deprecated in goreleaser v2; homebrew_casks is its replacement and
+# writes to the same tap (Casks/m314ss.rb). Install: brew install m314dev/tap/m314ss
+homebrew_casks:
+  - repository:
+      owner: m314dev
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://m314.dev
+    description: Check a subtitle belongs to a video by its audio, and sync it
+    license: MIT
+    dependencies:
+      - formula: ffmpeg
+    hooks:
+      post:
+        # The binary is not notarized; drop the quarantine flag so macOS runs it.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/m314ss"]
+          end
+
+scoops:
+  - repository:
+      owner: m314dev
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://m314.dev
+    description: Check a subtitle belongs to a video by its audio, and sync it
+    license: MIT
+    depends: [ffmpeg]
+
+aurs:
+  - name: m314ss-bin
+    homepage: https://m314.dev
+    description: Check a subtitle belongs to a video by its audio, and sync it
+    license: MIT
+    private_key: "{{ .Env.AUR_KEY }}"
+    git_url: ssh://aur@aur.archlinux.org/m314ss-bin.git
+    depends: [ffmpeg]
+
+dockers_v2:
+  - dockerfile: Dockerfile.goreleaser
+    images: [ghcr.io/m314dev/m314ss]
+    tags: ["{{ .Version }}", latest]
+    platforms: [linux/amd64, linux/arm64, linux/arm/v7]
+    labels:
+      org.opencontainers.image.source: https://github.com/m314dev/m314ss
+      org.opencontainers.image.url: https://m314.dev
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.licenses: MIT

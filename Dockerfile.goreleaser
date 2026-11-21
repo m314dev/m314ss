@@ -1,0 +1,8 @@
+# Image goreleaser publishes (see .goreleaser.yaml): it copies in the binary it
+# already built for each platform. m314ss shells out to ffmpeg for audio.
+FROM alpine:3.20
+RUN apk add --no-cache ffmpeg ca-certificates
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/m314ss /usr/local/bin/m314ss
+WORKDIR /data
+ENTRYPOINT ["m314ss"]
