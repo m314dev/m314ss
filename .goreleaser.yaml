@@ -78,7 +78,9 @@ aurs:
     homepage: https://m314.dev
     description: Check a subtitle belongs to a video by its audio, and sync it
     license: MIT
-    private_key: "{{ .Env.AUR_KEY }}"
+    # skipped until the AUR_KEY secret exists
+    disable: '{{ if eq (envOrDefault "AUR_KEY" "") "" }}true{{ end }}'
+    private_key: '{{ envOrDefault "AUR_KEY" "" }}'
     git_url: ssh://aur@aur.archlinux.org/m314ss-bin.git
     depends: [ffmpeg]
 
