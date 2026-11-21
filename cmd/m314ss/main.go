@@ -41,7 +41,7 @@ import (
 	"time"
 
 	subtitles "github.com/m314dev/m314ss"
-	"github.com/mohaanymo/subapi"
+	"github.com/m314dev/subapi"
 )
 
 func main() {

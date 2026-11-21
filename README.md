@@ -225,10 +225,10 @@ Audio extraction is the expensive part. Once the video has been analyzed, testin
 
 ## Using subtitle sources
 
-The SubDL and OpenSubtitles clients live in their own package, [subapi](https://github.com/mohaanymo/subapi):
+The SubDL and OpenSubtitles clients live in their own package, [subapi](https://github.com/m314dev/subapi):
 
 ```go
-import "github.com/mohaanymo/subapi"
+import "github.com/m314dev/subapi"
 ```
 
 ```go

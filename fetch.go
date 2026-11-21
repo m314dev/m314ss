@@ -8,7 +8,7 @@
 // the video before it's accepted, and the offset correction comes out of the
 // same pass.
 //
-// The searching itself is github.com/mohaanymo/subapi.
+// The searching itself is github.com/m314dev/subapi.
 //
 //	speech, _ := subtitles.Listen("/media/Breaking.Bad.S01E01.mkv")
 //	c := subtitles.Client{Sources: []subapi.Source{
@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	"github.com/m314dev/m314ss/srt"
-	"github.com/mohaanymo/subapi"
+	"github.com/m314dev/subapi"
 )
 
 // ErrNoMatch means every candidate was either unavailable or failed to align.
@@ -139,7 +139,7 @@ func (c *Client) translateFallback(ctx context.Context, q subapi.Query, prev err
 			continue
 		}
 
-		out, err := c.translate(ctx, res, q.Lang)
+		out, err := c.translate(ctx, res, q.Lang, q)
 		if err != nil {
 			c.logf("translating %s: %v", res.Release, err)
 			errs = append(errs, err)
@@ -150,9 +150,9 @@ func (c *Client) translateFallback(ctx context.Context, q subapi.Query, prev err
 	return Result{}, fmt.Errorf("%w (%v)", ErrNoMatch, errors.Join(errs...))
 }
 
-func (c *Client) translate(ctx context.Context, res Result, lang string) (Result, error) {
+func (c *Client) translate(ctx context.Context, res Result, lang string, q subapi.Query) (Result, error) {
 	s := c.TranslateWith
-	job, err := s.Translate(ctx, res.ID, strings.ToUpper(lang), c.Tone)
+	job, err := s.TranslateEp(ctx, res.ID, strings.ToUpper(lang), c.Tone, q.Season, q.Episode)
 	if err != nil {
 		return Result{}, err
 	}

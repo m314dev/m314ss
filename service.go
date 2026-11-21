@@ -6,11 +6,10 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/mohaanymo/subapi"
+	"github.com/m314dev/subapi"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
@@ -170,9 +169,8 @@ func mountAI(mux *http.ServeMux, s *subapi.SubDL) {
 	})
 
 	mux.HandleFunc("GET /ai/translations", func(w http.ResponseWriter, r *http.Request) {
-		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-		jobs, err := s.Translations(r.Context(), page)
-		writeJSON(w, jobs, err)
+		jobs, next, err := s.Translations(r.Context(), r.URL.Query().Get("cursor"))
+		writeJSON(w, map[string]any{"jobs": jobs, "next_cursor": next}, err)
 	})
 
 	mux.HandleFunc("GET /ai/translations/{id}", func(w http.ResponseWriter, r *http.Request) {
